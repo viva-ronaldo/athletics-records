@@ -56,7 +56,9 @@ smoothtimes = range(men100mdates[0].toordinal(),datetime.date.today().toordinal(
 # plt.show()
 
 #---- Predict next new record?
-events = ['Men100m','Women100m','Men200m','Women200m','Men400m','Women400m']
+events = ['Men100m','Women100m','Men200m','Women200m','Men400m','Women400m',
+          'Men800m','Women800m','Men1500m','Women1500m','Men5000m','Women5000m',
+          'Men10000m','Women10000m']
 
 for e in events:
     times, athletes, dates = [], [], []
@@ -111,10 +113,12 @@ allRecords.to_csv('recordsTable.csv')
 
 #---- Better to model on curve rather than look at previous single improvement
 #Take male and female separately for now
+#M:F speed ratio is ~1.11
 
 #TODO: normalise speeds across different distances by using top 20 in each in 2015
 
 #TODO: fit all male speeds to one curve
 
 #most recent record hopefully lies above the curve, so predict when curve 
-#  catches up
+#  catches up. May be better to make curve from top 5/10/20 per year but 
+#  only have these from 2000
