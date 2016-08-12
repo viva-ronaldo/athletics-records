@@ -109,16 +109,41 @@ for e in allRecords['event'].unique():
     print 'Predicted date for next %s record (following %.2f%% improvement): %s' % \
         (e,lastImprove,(subset.index[-1]+datetime.timedelta(days=int(intervalRegr.predict(lastImprove)))))
 
-allRecords.to_csv('recordsTable.csv')
-
 #---- Better to model on curve rather than look at previous single improvement
 #Take male and female separately for now
-#M:F speed ratio is ~1.11
+#M:F speed ratio is ~1.11. Leave out/correct for W 5000m, 
 
-#TODO: normalise speeds across different distances by using top 20 in each in 2015
+#normalise speeds across different distances by using top 20 in each in 2015
+#TODO: using 2016 so far, may not be enough esp for 10,000m
+allRecords['normSpeed'] = allRecords['speed']
+with open('data/top20ConvFactors.csv','r') as csvfile:
+    myreader = csv.reader(csvfile)
+    for row in myreader:
+        event = row[0].replace('Men','M').replace('Women','W')
+        allRecords.loc[allRecords.event==event,'normSpeed'] *= float(row[1])
 
 #TODO: fit all male speeds to one curve
+allRecords['MF'] = 'M'
+allRecords.loc[[allRecords.event[i][0]=='W' for \
+    i in range(len(allRecords))],'MF'] = 'W'
+allRecords['dateDays'] = [list(allRecords.index)[i].toordinal() for i in range(len(allRecords.normSpeed))]
 
-#most recent record hopefully lies above the curve, so predict when curve 
-#  catches up. May be better to make curve from top 5/10/20 per year but 
-#  only have these from 2000
+recCurveMen = np.polyfit(allRecords[allRecords['MF']=='M'].dateDays,
+                      allRecords[allRecords.MF=='M'].normSpeed,
+                      2)
+print 'Normalised speed today should be %.2f' % \
+    np.poly1d(recCurveMen)(datetime.date.today().toordinal())
+#plot scatter with fit line to inspect
+
+
+#TODO: most recent record hopefully lies above the curve, so predict when curve 
+#  catches up, using interpolation. 
+#  May be better to make curve from top 5/10/20 per year but only have these from 2000.
+
+
+#TODO: make table of all years, position of current record relative to line,
+#  target 'new record?' T or F. Maybe also 'record last year?' as feature.
+#  Some interpolation needed to get position relative to line in all years.
+
+
+allRecords.to_csv('recordsTable.csv')

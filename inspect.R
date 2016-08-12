@@ -1,6 +1,9 @@
-records <- read.csv('recordsTable.csv',header=TRUE)
+library(ggplot2)
 
-for (distance in unique(substr(mine$event,2,10))) {
+records <- read.csv('recordsTable.csv',header=TRUE)
+records$MF <- substring(records$event,1,1)
+
+for (distance in unique(substr(records$event,2,10))) {
     menMax <- max(records[grepl(paste0('M',distance),records$event),]$speed)
     womenMax <- max(records[grepl(paste0('W',distance),records$event),]$speed)
     cat(distance,': ',menMax/womenMax,'\n')
