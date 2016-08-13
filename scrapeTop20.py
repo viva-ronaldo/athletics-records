@@ -13,9 +13,9 @@ br = mechanize.Browser()
 avbesttimes = []
 for c in range(len(codes)):
     if 'Women' in events[c]:
-        response = br.open('http://www.all-athletics.com/en-us/top-lists?event=%s&year=2016&gender=F&bro=0' % codes[c])
+        response = br.open('http://www.all-athletics.com/en-us/top-lists?event=%s&year=2015&gender=F&bro=0' % codes[c])
     else:
-        response = br.open('http://www.all-athletics.com/en-us/top-lists?event=%s&year=2016&bro=0' % codes[c])
+        response = br.open('http://www.all-athletics.com/en-us/top-lists?event=%s&year=2015&bro=0' % codes[c])
     response = response.readlines()
 
     for line in response:

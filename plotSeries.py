@@ -60,6 +60,7 @@ events = ['Men100m','Women100m','Men200m','Women200m','Men400m','Women400m',
           'Men800m','Women800m','Men1500m','Women1500m','Men5000m','Women5000m',
           'Men10000m','Women10000m']
 
+currentRecords, currentRecordSpeeds = [], []
 for e in events:
     times, athletes, dates = [], [], []
     with open('data/%sProgress.csv' % e,'r') as csvfile:
@@ -72,9 +73,11 @@ for e in events:
                 dates.append(datetime.date(int(y),{'January':1,'February':2,'March':3,
                     'April':4,'May':5,'June':6,'July':7,'August':8,'September':9,
                     'October':10,'November':11,'December':12}[m],int(d[:-1])))
+        currentRecords.append(times[-1])
 
     distance = int(e.replace('Men','').replace('Women','')[:-1])
     speeds = [distance/times[i] for i in range(len(times))]
+
     prevdrops = [times[i-1]-times[i] 
         for i in range(1,len(times)-1)]
     prevImproves = [100*(speeds[i]-speeds[i-1])/speeds[i-1] 
@@ -83,6 +86,7 @@ for e in events:
         for i in range(2,len(dates))]
     #print 'Corr between prev drop and interval to next record = ',\
     #    pearsonr(prevdrops,intervals)[0]
+    currentRecordSpeeds.append(distance/currentRecords[-1])
 
     if e == events[0]:
         allRecords = pd.DataFrame(index=dates[2:],
@@ -114,7 +118,6 @@ for e in allRecords['event'].unique():
 #M:F speed ratio is ~1.11. Leave out/correct for W 5000m, 
 
 #normalise speeds across different distances by using top 20 in each in 2015
-#TODO: using 2016 so far, may not be enough esp for 10,000m
 allRecords['normSpeed'] = allRecords['speed']
 with open('data/top20ConvFactors.csv','r') as csvfile:
     myreader = csv.reader(csvfile)
@@ -122,28 +125,74 @@ with open('data/top20ConvFactors.csv','r') as csvfile:
         event = row[0].replace('Men','M').replace('Women','W')
         allRecords.loc[allRecords.event==event,'normSpeed'] *= float(row[1])
 
-#TODO: fit all male speeds to one curve
+#fit all male speeds to one curve
 allRecords['MF'] = 'M'
 allRecords.loc[[allRecords.event[i][0]=='W' for \
     i in range(len(allRecords))],'MF'] = 'W'
 allRecords['dateDays'] = [list(allRecords.index)[i].toordinal() for i in range(len(allRecords.normSpeed))]
 
-recCurveMen = np.polyfit(allRecords[allRecords['MF']=='M'].dateDays,
-                      allRecords[allRecords.MF=='M'].normSpeed,
-                      2)
+allRecordsMen = allRecords[allRecords['MF']=='M']
+allRecordsWomen = allRecords[allRecords['MF']=='W']
+
+recCurveMen = np.polyfit(allRecordsMen.dateDays,
+                         allRecordsMen.normSpeed,
+                         2)
+recCurveWomen = np.polyfit(allRecordsWomen.dateDays,
+                           allRecordsWomen.normSpeed,
+                           2)
+recCurveMen = np.poly1d(recCurveMen)
+recCurveWomen = np.poly1d(recCurveWomen)
+
 print 'Normalised speed today should be %.2f' % \
-    np.poly1d(recCurveMen)(datetime.date.today().toordinal())
+    recCurveMen(datetime.date.today().toordinal())
+
 #plot scatter with fit line to inspect
+plt.plot(allRecordsMen['dateDays'],allRecordsMen['normSpeed'],'x')
+plt.plot(range(700000,737000,3000),
+    [recCurveMen(d) for d in range(700000,737000,3000)],'g')
+#plt.plot(range(700000,736000,3000),
+#    [recCurveWomen(d) for d in range(700000,736000,3000)],'g')
+plt.show()
 
-
-#TODO: most recent record hopefully lies above the curve, so predict when curve 
+#most recent record hopefully lies above the curve, so predict when curve 
 #  catches up, using interpolation. 
 #  May be better to make curve from top 5/10/20 per year but only have these from 2000.
-
+curveMenNow = recCurveMen(datetime.date.today().toordinal())
+for speed in currentRecordSpeeds:
+    findRecord = allRecords[allRecords.speed==speed]
+    if (findRecord.MF == 'M')[0]:
+        print '%s record speed %.2f, curve now at %.2f' % \
+            (findRecord.event[0],findRecord.normSpeed,curveMenNow)
+#All records below curve but seems to say 200m is hardest and 
+#  400m,1500m closest to curve
+for row in allRecordsMen.iterrows():
+    if row[0] > datetime.date(1995,1,1):
+        print row[1].event,row[0],row[1].time,row[1].normSpeed-recCurveMen(row[1].dateDays)
 
 #TODO: make table of all years, position of current record relative to line,
 #  target 'new record?' T or F. Maybe also 'record last year?' as feature.
 #  Some interpolation needed to get position relative to line in all years.
+diffsRecYears, diffsNoRecYears = [], []
+for event in np.unique(allRecordsMen.event):
+    eventOnly = allRecordsMen[allRecordsMen.event==event]
+    for year in range(1990,2017):
+        toDateOnly = eventOnly[eventOnly.index < datetime.date(year,1,1)]
+        currentRecord = toDateOnly.tail(1).normSpeed[0]
+        newRecordThisYear = len(eventOnly[[list(eventOnly.index)[i].year==year for i in range(len(eventOnly.index))]])
+        if newRecordThisYear:
+            diffsRecYears.append(currentRecord-recCurveMen(datetime.date(year,1,1).toordinal()))
+        else:
+            diffsNoRecYears.append(currentRecord-recCurveMen(datetime.date(year,1,1).toordinal()))
+
+print 'Average curve diff in years with new record set = %.3f' % np.mean(diffsRecYears)
+print 'Average curve diff in years with no new record set = %.3f' % np.mean(diffsNoRecYears)
+#For men it's -0.04 vs -0.01, so records are more likely
+
+recYears = pd.DataFrame(data=np.dstack([diffsRecYears,[True]*len(diffsRecYears)])[0],
+    columns=['curveDiff','newRecord'])
+recYears = recYears.append(pd.DataFrame(data=np.dstack([diffsNoRecYears,[False]*len(diffsNoRecYears)])[0],
+    columns=['curveDiff','newRecord']))
+#TODO: train model on this?
 
 
 allRecords.to_csv('recordsTable.csv')
