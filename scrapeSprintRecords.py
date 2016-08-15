@@ -2,6 +2,7 @@ import mechanize,re,csv
 
 mf = 'Men'
 distance = 400
+#(added earlier M400m, M100m to file by hand)
 
 if mf == 'Women' and distance in [100,200]:
     athleteColNumber = 3

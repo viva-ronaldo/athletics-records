@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 import pandas as pd
 from sklearn import linear_model
-from sklearn.metrics import precision_score,recall_score,average_precision_score
+from sklearn.metrics import precision_score,recall_score,average_precision_score,brier_score_loss
 
 #---- Predict next new record?
 events = ['Men100m','Women100m','Men200m','Women200m','Men400m','Women400m',
@@ -95,8 +95,8 @@ with open('data/top20ConvFactors.csv','r') as csvfile:
         #if 'W' in event:
         #    allRecords.loc[allRecords.event==event,'normSpeed'] /= WtoMconv
 
-#fit all male speeds to one curve
-#TODO: can probably fit M and W to one curve if start from ~1970
+#Use only men records to get good curve which avoids problems of women
+#  events starting later. 
 allRecords['MF'] = 'M'
 allRecords.loc[[allRecords.event[i][0]=='W' for \
     i in range(len(allRecords))],'MF'] = 'W'
@@ -114,15 +114,12 @@ recordsWomenToFit = allRecordsWomen[~allRecordsWomen.event.isin\
 recCurveWomen = np.polyfit(recordsWomenToFit.dateDays,
                            recordsWomenToFit.normSpeed,
                            2)
-recordsAllToFit = recordsMenToFit.append(recordsWomenToFit)
-#recCurveAll = np.polyfit(allRecords[allRecords.dateDays >= 619163].dateDays,
-#    allRecords[allRecords.dateDays >= 619163].normSpeed,2)
-recCurveAll = np.polyfit(recordsAllToFit.dateDays,recordsAllToFit.normSpeed,2)
+#recordsAllToFit = recordsMenToFit.append(recordsWomenToFit)
+#recCurveAll,res,b,c,d = np.polyfit(recordsAllToFit.dateDays,recordsAllToFit.normSpeed,2,full=True)
 recCurveMen = np.poly1d(recCurveMen)
 recCurveWomen = np.poly1d(recCurveWomen)
-recCurveAll = np.poly1d(recCurveAll)
 
-print 'Normalised speed today should be %.2f' % \
+print 'Normalised performance score today should be %.3f' % \
     recCurveMen(datetime.date.today().toordinal())
 
 #plot scatter with fit line to inspect
@@ -132,8 +129,8 @@ plt.plot(range(700000,737000,3000),
 plt.plot(recordsWomenToFit['dateDays'],recordsWomenToFit['normSpeed'],'rx',label='W')
 plt.plot(range(700000,737000,3000),
     [recCurveWomen(d) for d in range(700000,737000,3000)],'Brown')
-plt.plot(range(720000,737000,2000),
-    [recCurveAll(d) for d in range(720000,737000,2000)],'k')
+#plt.plot(range(720000,737000,2000),
+#    [recCurveAll(d) for d in range(720000,737000,2000)],'k')
 plt.legend(loc='lower right')
 plt.title('Excluding throws and W400m, W800m')
 plt.show()
@@ -156,70 +153,93 @@ for speed in currentRecordSpeeds:
 #TODO: make table of all years, position of current record relative to line,
 #  target 'new record?' T or F. Maybe also 'record last year?' as feature.
 #  Some interpolation needed to get position relative to line in all years.
-years, diffs, newrecs, events, lengths = [], [], [], [], []
-for event in np.unique(allRecordsMen.event):
-    eventOnly = allRecordsMen[allRecordsMen.event==event]
+years, diffs, newrecs, events, lengths, recents = [], [], [], [], [], []
+for event in np.unique(allRecords.event):
+    eventOnly = allRecords[allRecords.event==event]
     for year in range(1990,2017):
         toDateOnly = eventOnly[eventOnly.index < datetime.date(year,1,1)]
-        currentRecord = toDateOnly.tail(1).normSpeed[0]
-        lengthStood = (datetime.date(year,1,1)-toDateOnly.tail(1).index[0]).days
-        lengths.append(lengthStood)
-        newRecordThisYear = len(eventOnly[[list(eventOnly.index)[i].year==year for i in range(len(eventOnly.index))]])
-        if newRecordThisYear:
-            newrecs.append(1)
-        else:
-            newrecs.append(0)
-        years.append(year)
-        events.append(event)
-        diffs.append(currentRecord-recCurveMen(datetime.date(year,1,1).toordinal()))
+        if toDateOnly.shape[0] > 0:
+            currentRecord = toDateOnly.tail(1).normSpeed[0]
+            lengthStood = (datetime.date(year,1,1)-toDateOnly.tail(1).index[0]).days
+            lengths.append(lengthStood)
+            if lengthStood < 2*365:
+                recents.append(1)
+            else:
+                recents.append(0)
+            newRecordThisYear = len(eventOnly[[list(eventOnly.index)[i].year==year for i in range(len(eventOnly.index))]])
+            if newRecordThisYear:
+                newrecs.append(1)
+            else:
+                newrecs.append(0)
+            years.append(year)
+            events.append(event)
+            diffs.append(currentRecord-recCurveMen(datetime.date(year,1,1).toordinal()))
+#TODO a cutoff of record in previous 1 or 2 years may be better than lengthStood
 
 #print 'Average curve diff in years with new record set = %.3f' % np.mean(diffsRecYears)
 #print 'Average curve diff in years with no new record set = %.3f' % np.mean(diffsNoRecYears)
 #For men it's -0.04 vs -0.01, so records are more likely
 
-recYears = pd.DataFrame(data=np.dstack([years,events,diffs,lengths,newrecs])[0],
-    columns=['year','event','curveDiff','lengthStood','newRecord'])
+recYears = pd.DataFrame(data=np.dstack([years,events,diffs,lengths,recents,newrecs])[0],
+    columns=['year','event','curveDiff','lengthStood','setRecently','newRecord'])
 recYears.year = recYears.year.astype('int')
 recYears.curveDiff = recYears.curveDiff.astype('float')
 recYears.newRecord = recYears.newRecord.astype('int')
+recYears.setRecently = recYears.setRecently.astype('int')
 recYears.lengthStood = recYears.lengthStood.astype('int')
 
 #Av age of record in years with new record is 1721 days, non-rec years 3341
+histbins = recYears.sort_values('lengthStood').lengthStood.values[[0,80,160,240,320,-1]]
 
-#TODO add age of record as predictor
+#Olympic years seem slightly better for records
+recYears['Oyear'] = [0]*recYears.shape[0]
+recYears.loc[recYears.year % 4 == 0,'Oyear'] = 1
+
+
+#TODO add age of record as predictor - fit is too sensitive to this at present
+print '\nCorr(newRecord,curveDiff) = %.2f' % pearsonr(recYears.newRecord,recYears.curveDiff)[0]
+print 'Corr(newRecord,lengthStood) = %.2f' % pearsonr(recYears.newRecord,recYears.lengthStood)[0]
 #train model 
-mylogreg = linear_model.LogisticRegression()
-mylogreg.fit(np.asmatrix(list(recYears.curveDiff)).transpose(),
-    newrecs)
-diffsTrain = [[list(recYears.curveDiff)[i]] for i in range(recYears.shape[0])]
+mylogreg = linear_model.LogisticRegression(C=50)  #higher penalty fits tighter
+mylogreg.fit(np.asmatrix([recYears.curveDiff,
+                          recYears.setRecently,
+                          recYears.Oyear]).transpose(),
+             newrecs)
+diffsTrain = [[recYears.curveDiff.values[i],
+               recYears.setRecently.values[i],
+               recYears.Oyear.values[i]] for i in range(recYears.shape[0])]
 predsTrain = mylogreg.predict_proba(diffsTrain)
-print '\n'
-for thresh in [0.888,0.889,0.890,0.891,0.892,0.893,0.894]:
-    classPredsTrain = []
-    for p in predsTrain:
-        whichClass = 0 if p[0] > thresh else 1
-        classPredsTrain.append(whichClass)
-    print 'Threshold %.3f, precision = %.3f, recall = %.3f' % (thresh,\
-        precision_score(newrecs,classPredsTrain),\
-        recall_score(newrecs,classPredsTrain))
-    #print 'av precision score = %.3f' % average_precision_score(newrecs,classPredsTrain)
-print '\n'
-#print 'Training accuracy = %.1f%%' % \
-#    (100*mylogreg.score(np.asmatrix(list(recYears.curveDiff)).transpose(),
-#        newrecs))
+#Precision etc not so relevant because I'm not trying to predict records
+#  in a given year. It is enough to say which are coming sooner than others.
+#  So use probabilistic predictions
+print '\nBrier = %.3f' % (brier_score_loss(newrecs,[predsTrain[i][1] for i in range(len(newrecs))]))
+#Using constant prob of ~0.11 gives 0.093
 
 #predictions for 2016
-diffs2016 = [[list(recYears[recYears.year==2016.].curveDiff)[i]] \
-    for i in range(sum(recYears.year==2016.))]
+recYears2016 = recYears[recYears.year==2016]
+diffs2016 = [[recYears2016.curveDiff.values[i],
+              recYears2016.setRecently.values[i],
+              recYears2016.Oyear.values[i]] for i in range(recYears2016.shape[0])]
+#diffs2016 = [[recYears[recYears.year==2016].curveDiff[i],
+#              recYears[recYears.year==2016].lengthStood[i]] \
+#    for i in range(sum(recYears.year==2016))]    
 preds2016 = mylogreg.predict_proba(diffs2016)
-print 'Chance of records in 2016:'
+preds2016table = pd.DataFrame(columns=['event','chance'])
+#print '\nChance of records in 2016:'
 for e in range(len(diffs2016)):
-    print '%s (%s%.3f): %.1f%%' % (np.unique(allRecordsMen.event)[e],
-        '+' if diffs2016[e][0] > 0 else '-',
-        diffs2016[e][0] if diffs2016[e][0] > 0 else -1*diffs2016[e][0],
-        100*preds2016[e][1])
+    #print '%s (%s%.3f, %i days): %.1f%%' % (np.unique(allRecords.event)[e],
+    #    '+' if diffs2016[e][0] > 0 else '-',
+    #    diffs2016[e][0] if diffs2016[e][0] > 0 else -1*diffs2016[e][0],
+    #    recYears2016.lengthStood.values[e],
+    #    100*preds2016[e][1])
+    preds2016table = preds2016table.append(pd.Series({'event':np.unique(allRecords.event)[e],
+        'chance':round(100*preds2016[e][1],1)}), ignore_index=True)
+
+print '\nMost likely records in 2016:'
+print preds2016table.sort_values('chance',ascending=False).head(8)
+print '\nLeast likely:'
+print preds2016table.sort_values('chance',ascending=True).head(8)
 
 #TODO: can run through different years and get prob of record by 2026
-
 
 allRecords.to_csv('recordsTable.csv')

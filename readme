@@ -1,5 +1,6 @@
 www.all-athletics.com for top 20 times per year
 www.trackandfieldnews.com for yearly leaders
+Pre-IAAF M400m and some M100m added by hand to help curve fitting.
 
 - could use more/all years (2002-2016) for top 20 normalisation factors
 DONE get long jump, triple jump next and try to add to curve
@@ -7,7 +8,7 @@ DONE get long jump, triple jump next and try to add to curve
 DONE javelin too complicated. Hammer for women added late.
   Other throwing events OK but no records since 1990 in any.
   Normalisation using 2015 top 20 may show those 1980s marks as anomalous.
-- 4x hurdles events
+DONE 4x hurdles events
 
 Fit all to one curve?
 - throwing events show different trend so probably need to separate
@@ -18,3 +19,12 @@ Other predictors:
     M200m in 1996. So short time since last record is helpful. Long time
     since last suggests less likely to break, unless now below curve, which
     counteracts this.
+- slightly more chance of record in Olympic years than other (since 1990,
+    0.12 vs 0.09-0.10 based on 12 vs 9 records) 
+
+Now have 3 new records as test: W 10000m, M 400m, W Discus
+
+Notes:
+- of W throwing events, Discus and Shot put out of reach in 80s, but 
+    Hammer only introduced in 1995 so roughly on curve and record possible.
+    Also 3 records in last 2 years.
