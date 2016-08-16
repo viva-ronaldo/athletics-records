@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<meta charset="utf-8">
+<style>
+.chart rect {
+  fill: steelblue;
+}
+.chart text {
+  fill: white;
+  font: 10px sans-serif;
+  text-anchor: end;
+}
+body {
+  width: 100%;
+}
+.svgholder {
+  width: 70%;
+  float: left;
+  height: 70%;
+}
+.svgholderHalf {
+  width: 50%;
+  float: left;
+}
+.svgwide {
+  width: 90%;
+  height: 70%;
+}
+div.tooltip {   
+    position: absolute;
+    text-align: center;
+    width: 130px;           
+    height: 28px;
+    padding: 2px;
+    font: 12px sans-serif;
+    background: lightsteelblue;
+    border: 0px;
+    border-radius: 8px;
+    pointer-events: none;
+}
+</style>
+
+<head>
+  <h1>Athletics records</h1>
+<script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="http://dimplejs.org/dist/dimple.v2.2.0.min.js"></script>
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+<script type="text/javascript" src="https://d3.js.org/d3.layout.js"></script>
+</head>
+
+<body>
+
+<p>Some text</p>
+
+<div id="svg1" class="svgholder"></div>
+
+
+
+<script type="text/javascript">
+
+
+//var svg1 = dimple.newSvg("#svg1","100%","100%");
+var svg1 = dimple.newSvg("#svg1",1090,700);
+
+//var svg3 = dimple.newSvg("#svg3","100%","100%");
+
+d3.csv("recordsTable.csv", function (data) {
+    data.forEach(function(d){
+      d.identifier = d.athlete+"-"+d.event+"-"+d.normPerformance+"-"+d.date;
+      d.dateDays = +d.dateDays + (Math.random()-0.5)*0.6;
+      d.daysSincePrev = +d.daysSincePrev;
+      d.pctImprove = +d.pctImprove;
+      d.normPerformance = +d.normPerformance;
+    });
+
+    var myChart = new dimple.chart(svg1, data);
+    myChart.setBounds("10%","8%","85%","70%");
+    var x = myChart.addMeasureAxis("x", "dateDays");
+    var y = myChart.addMeasureAxis("y", "normPerformance");
+    //var z = myChart.addCategoryAxis("z", "event");
+    //var c = myChart.addMeasureAxis("color", "event");
+    var s = myChart.addSeries(["identifier","MF"], dimple.plot.bubble);
+    //**the first grouping here 'identifier' stops aggregating points,
+    //    while the second is used for colouring.
+
+    y.title = "Standardised performance";
+    x.title = null;
+    x.overrideMin = 700000;
+    y.overrideMin = 0.4;
+    y.overrideMax = 1.2;
+
+    s.getTooltipText = function (e) {
+      return [e.key.split("-")[0]+", "+e.key.split("-")[1]+": ",
+              parseFloat(e.key.split("-")[2]).toFixed(4)+" ("+e.key.split("-")[3]+")"]
+    }; 
+
+    myChart.addLegend("85%", "75%", 360, 120, "right");
+    myChart.draw();
+
+  });
+
+</script>
+
+</body>
+</html>

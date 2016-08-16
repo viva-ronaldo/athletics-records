@@ -43,6 +43,8 @@ for e in events:
         for i in range(1,len(times)-1)]
     prevImproves = [100*(speeds[i]-speeds[i-1])/speeds[i-1] 
         for i in range(1,len(speeds)-1)]
+    pctImproves = [100*(speeds[i]-speeds[i-1])/speeds[i-1] 
+        for i in range(2,len(speeds))]
     intervals = [(dates[i]-dates[i-1]).days 
         for i in range(2,len(dates))]
 
@@ -53,16 +55,23 @@ for e in events:
 
     if e == events[0]:
         allRecords = pd.DataFrame(index=dates[2:],
-            data=np.dstack([times[2:],speeds[2:],prevdrops,prevImproves,intervals])[0],
-            columns=['time','speed','prevDrop','prevImprove','daysSincePrev'])
+            data=np.dstack([athletes[2:],times[2:],speeds[2:],pctImproves,prevdrops,prevImproves,intervals])[0],
+            columns=['athlete','time','speed','pctImprove','prevDrop','prevImprove','daysSincePrev'])
         allRecords['event'] = [e.replace('Men','M').replace('Women','W')]*len(intervals)
     else:
         allRecords = allRecords.append(pd.DataFrame(index=dates[2:],
-            data=np.dstack([times[2:],speeds[2:],prevdrops,prevImproves,intervals])[0],
+            data=np.dstack([athletes[2:],times[2:],speeds[2:],pctImproves,prevdrops,prevImproves,intervals])[0],
 
-            columns=['time','speed','prevDrop','prevImprove','daysSincePrev']))
+            columns=['athlete','time','speed','pctImprove','prevDrop','prevImprove','daysSincePrev']))
         allRecords.iloc[-len(intervals):,list(allRecords.columns).index('event')] = \
             [e.replace('Men','M').replace('Women','W')]*len(intervals)
+
+allRecords.time = allRecords.time.astype(float)
+allRecords.speed = allRecords.speed.astype(float)
+allRecords.pctImprove = allRecords.pctImprove.astype(float)
+allRecords.prevDrop = allRecords.prevDrop.astype(float)
+allRecords.prevImprove = allRecords.prevImprove.astype(float)
+allRecords.daysSincePrev = allRecords.daysSincePrev.astype(int)
 
 intervalRegr = linear_model.LinearRegression(fit_intercept=False)
 
@@ -81,41 +90,41 @@ intervalRegr.fit(np.asmatrix(list(allRecords['prevImprove'])).transpose(),
 #M:F speed ratio is ~1.11. Leave out/correct for W 5000m, 
 
 #normalise speeds across different distances by using top 20 in each in 2015
-allRecords['normSpeed'] = allRecords['speed']
+allRecords['normPerformance'] = allRecords['speed']
 with open('data/top20ConvFactors.csv','r') as csvfile:
     myreader = csv.reader(csvfile)
     for row in myreader:
         event = row[0].replace('Men','M').replace('Women','W')
-        allRecords.loc[allRecords.event==event,'normSpeed'] /= float(row[1])
+        allRecords.loc[allRecords.event==event,'normPerformance'] /= float(row[1])
         #if event == 'M100m':
         #    Mspeed = float(row[1])
         #elif event == 'W100m':
         #    Wspeed = float(row[1])
         #    WtoMconv = Wspeed/Mspeed
         #if 'W' in event:
-        #    allRecords.loc[allRecords.event==event,'normSpeed'] /= WtoMconv
+        #    allRecords.loc[allRecords.event==event,'normPerformance'] /= WtoMconv
 
 #Use only men records to get good curve which avoids problems of women
 #  events starting later. 
 allRecords['MF'] = 'M'
 allRecords.loc[[allRecords.event[i][0]=='W' for \
     i in range(len(allRecords))],'MF'] = 'W'
-allRecords['dateDays'] = [list(allRecords.index)[i].toordinal() for i in range(len(allRecords.normSpeed))]
+allRecords['dateDays'] = [list(allRecords.index)[i].toordinal() for i in range(len(allRecords.normPerformance))]
 
 allRecordsMen = allRecords[allRecords['MF']=='M']
 allRecordsWomen = allRecords[allRecords['MF']=='W']
 
 recordsMenToFit = allRecordsMen[~allRecordsMen.event.isin(['MHammer','MShot_put','MDiscus'])]
 recCurveMen = np.polyfit(recordsMenToFit.dateDays,
-                         recordsMenToFit.normSpeed,
+                         recordsMenToFit.normPerformance,
                          2)
 recordsWomenToFit = allRecordsWomen[~allRecordsWomen.event.isin\
     (['WHammer','WShot_put','WDiscus','W400m','W800m'])]
 recCurveWomen = np.polyfit(recordsWomenToFit.dateDays,
-                           recordsWomenToFit.normSpeed,
+                           recordsWomenToFit.normPerformance,
                            2)
 #recordsAllToFit = recordsMenToFit.append(recordsWomenToFit)
-#recCurveAll,res,b,c,d = np.polyfit(recordsAllToFit.dateDays,recordsAllToFit.normSpeed,2,full=True)
+#recCurveAll,res,b,c,d = np.polyfit(recordsAllToFit.dateDays,recordsAllToFit.normPerformance,2,full=True)
 recCurveMen = np.poly1d(recCurveMen)
 recCurveWomen = np.poly1d(recCurveWomen)
 
@@ -123,10 +132,10 @@ print 'Normalised performance score today should be %.3f' % \
     recCurveMen(datetime.date.today().toordinal())
 
 #plot scatter with fit line to inspect
-plt.plot(recordsMenToFit['dateDays'],recordsMenToFit['normSpeed'],'bx',label='M')
+plt.plot(recordsMenToFit['dateDays'],recordsMenToFit['normPerformance'],'bx',label='M')
 plt.plot(range(700000,737000,3000),
     [recCurveMen(d) for d in range(700000,737000,3000)],'g')
-plt.plot(recordsWomenToFit['dateDays'],recordsWomenToFit['normSpeed'],'rx',label='W')
+plt.plot(recordsWomenToFit['dateDays'],recordsWomenToFit['normPerformance'],'rx',label='W')
 plt.plot(range(700000,737000,3000),
     [recCurveWomen(d) for d in range(700000,737000,3000)],'Brown')
 #plt.plot(range(720000,737000,2000),
@@ -140,15 +149,15 @@ plt.show()
 #  May be better to make curve from top 5/10/20 per year but only have these from 2000.
 curveMenNow = recCurveMen(datetime.date.today().toordinal())
 for speed in currentRecordSpeeds:
-    findRecord = allRecords[allRecords.speed==speed]
+    findRecord = allRecords[np.isclose(allRecords.speed,speed)]
     if (findRecord.MF == 'M')[0]:
         print '%s record speed %.3f, curve now at %.3f' % \
-            (findRecord.event[0],findRecord.normSpeed,curveMenNow)
+            (findRecord.event[0],findRecord.normPerformance,curveMenNow)
 #All records below curve but seems to say 200m is hardest and 
 #  400m,1500m closest to curve
 #for row in allRecordsMen.iterrows():
 #    if row[0] > datetime.date(1995,1,1):
-#        print row[1].event,row[0],row[1].time,row[1].normSpeed-recCurveMen(row[1].dateDays)
+#        print row[1].event,row[0],row[1].time,row[1].normPerformance-recCurveMen(row[1].dateDays)
 
 #TODO: make table of all years, position of current record relative to line,
 #  target 'new record?' T or F. Maybe also 'record last year?' as feature.
@@ -159,7 +168,7 @@ for event in np.unique(allRecords.event):
     for year in range(1990,2017):
         toDateOnly = eventOnly[eventOnly.index < datetime.date(year,1,1)]
         if toDateOnly.shape[0] > 0:
-            currentRecord = toDateOnly.tail(1).normSpeed[0]
+            currentRecord = toDateOnly.tail(1).normPerformance[0]
             lengthStood = (datetime.date(year,1,1)-toDateOnly.tail(1).index[0]).days
             lengths.append(lengthStood)
             if lengthStood < 2*365:
@@ -242,4 +251,6 @@ print preds2016table.sort_values('chance',ascending=True).head(8)
 
 #TODO: can run through different years and get prob of record by 2026
 
-allRecords.to_csv('recordsTable.csv')
+#TODO lose prevDrop, other columns, in prep for d3 page?
+#TODO set eventType column using function
+allRecords.to_csv('recordsTable.csv',index_label='date')
