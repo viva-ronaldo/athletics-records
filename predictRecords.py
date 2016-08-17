@@ -21,6 +21,7 @@ for e in events:
     with open('data/%sProgress.csv' % e,'r') as csvfile:
         myreader = csv.reader(csvfile)
         for row in myreader:
+            #exclude record-equalling cases
             if len(times) == 0 or float(row[0]) != times[-1]:
                 times.append(float(row[0]))
                 athletes.append(row[1])
@@ -251,6 +252,20 @@ print preds2016table.sort_values('chance',ascending=True).head(8)
 
 #TODO: can run through different years and get prob of record by 2026
 
+def setEType(e):
+    if e.endswith('m') or e.endswith('Hurdles'):
+        return 'run'
+    elif e.endswith('jump'):
+        return 'jump'
+    else:
+        return 'throw'
+allRecords['eventType'] = allRecords.event.map(setEType)
+
+allRecords['month'] = [allRecords.index[i].strftime('%b') for i in range(allRecords.shape[0])]
+
+pctInds = np.digitize(allRecords.pctImprove, bins=[0.2,0.5,1,2])
+pctCats = {0:'<0.2',1:'0.2-0.5',2:'0.5-1',3:'1-2',4:'>2'}
+allRecords['pctImproveCat'] = map(lambda x: pctCats.get(x), pctInds)
+
 #TODO lose prevDrop, other columns, in prep for d3 page?
-#TODO set eventType column using function
 allRecords.to_csv('recordsTable.csv',index_label='date')
